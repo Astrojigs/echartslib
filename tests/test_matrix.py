@@ -364,8 +364,8 @@ class TestCellBuilderParity:
         mat = MatrixFigure(rows=["R1"], cols=["C1"])
         mat.cell(0, 0).bar(df, "X", "Y")
         opt = mat.to_option()
-        # Single series named "Y" still gets legend
-        assert "legend" in opt
+        # No legend when there's no hue grouping
+        assert "legend" not in opt
 
     def test_backward_compat_simple_bar(self):
         """Simple bar call still works the same as before."""
@@ -411,3 +411,33 @@ class TestCellBuilderParity:
         pie = [s for s in opt["series"] if s["type"] == "pie"][0]
         assert pie["center"] == ["50%", "50%"]
         assert pie["radius"] == ["20%", "40%"]
+
+    def test_bar_with_blur_select(self):
+        df = pd.DataFrame({"X": ["A", "B"], "Y": [10, 20]})
+        mat = MatrixFigure(rows=["R1"], cols=["C1"])
+        mat.cell(0, 0).bar(df, "X", "Y",
+                           blur=ec.Blur(item_style=ec.ItemStyle(opacity=0.2)),
+                           select=ec.Select(item_style=ec.ItemStyle(border_width=3)),
+                           selected_mode="multiple")
+        s = mat._cells[(0, 0)].series_configs[0]
+        assert "blur" in s
+        assert "select" in s
+        assert s["selectedMode"] == "multiple"
+
+    def test_plot_with_animation(self):
+        df = pd.DataFrame({"X": ["A", "B"], "Y": [10, 20]})
+        mat = MatrixFigure(rows=["R1"], cols=["C1"])
+        mat.cell(0, 0).plot(df, "X", "Y",
+                            animation=ec.AnimationConfig(
+                                animation_duration=1000))
+        s = mat._cells[(0, 0)].series_configs[0]
+        assert s["animationDuration"] == 1000
+
+    def test_pie_legend_without_hue(self):
+        """Pie always emits legend (names are meaningful categories)."""
+        df = pd.DataFrame({"Name": ["A", "B"], "Val": [30, 70]})
+        mat = MatrixFigure(rows=["R1"], cols=["C1"])
+        mat.cell(0, 0).pie(df, "Name", "Val")
+        opt = mat.to_option()
+        assert "legend" in opt
+        assert set(opt["legend"]["data"]) == {"A", "B"}

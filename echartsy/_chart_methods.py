@@ -23,7 +23,7 @@ from echartsy._helpers import (
     _validate_columns,
     _validate_df,
 )
-from echartsy.emphasis import Emphasis, LineEmphasis, PieEmphasis, ScatterEmphasis
+from echartsy.emphasis import Emphasis, ItemStyle, LineEmphasis, PieEmphasis, ScatterEmphasis
 
 
 def build_line_series(
@@ -297,7 +297,7 @@ def build_pie_series(
     avoid_label_overlap: Optional[bool] = None,
     animation_type: Optional[Literal["expansion", "scale"]] = None,
     emphasis: Optional[PieEmphasis] = None,
-    item_style: Optional[Any] = None,
+    item_style: Optional[ItemStyle] = None,
     agg: str = "sum",
     **series_kw: Any,
 ) -> Tuple[dict, List[str]]:
@@ -313,6 +313,9 @@ def build_pie_series(
     dff = df.copy()
     dff[values] = _coerce_numeric(dff, values, "pie")
     dff = dff.dropna(subset=[names, values])
+    if dff.empty:
+        warnings.warn("pie(): all rows dropped; chart will be empty", stacklevel=3)
+        return {"type": "pie", "data": [], "label": {"show": False}}, []
 
     # Aggregate duplicate names
     agg_fn = _resolve_agg(agg)

@@ -105,7 +105,8 @@ class _CellBuilder:
             if bar_category_gap is not None:
                 entry["barCategoryGap"] = bar_category_gap
             self._cell.series_configs.append(entry)
-        self._cell.legend_names.extend(legend)
+        if hue:
+            self._cell.legend_names.extend(legend)
         return self._matrix
 
     def plot(
@@ -156,7 +157,8 @@ class _CellBuilder:
                 tooltip=tooltip,
             )
             self._cell.series_configs.append(entry)
-        self._cell.legend_names.extend(legend)
+        if hue:
+            self._cell.legend_names.extend(legend)
         return self._matrix
 
     def scatter(
@@ -201,7 +203,8 @@ class _CellBuilder:
                 tooltip=tooltip,
             )
             self._cell.series_configs.append(entry)
-        self._cell.legend_names.extend(legend)
+        if color:
+            self._cell.legend_names.extend(legend)
         return self._matrix
 
     def pie(

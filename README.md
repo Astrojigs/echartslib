@@ -85,7 +85,7 @@ Three lines from DataFrame to interactive chart.
 
 ## Chart Types
 
-echartsy v0.7.0 supports **19 chart types** covering cartesian, standalone, hierarchical, relational, and statistical visualizations.
+echartsy v0.7.1 supports **19 chart types** covering cartesian, standalone, hierarchical, relational, and statistical visualizations.
 
 ### Cartesian Charts
 
@@ -593,6 +593,12 @@ Same as `Figure` but adds timeline animation. Extra parameters:
 ---
 
 ## Changelog (Recent)
+
+### v0.7.1
+- **Fixed:** `build_pie_series()` type hint corrected (`Optional[Any]` → `Optional[ItemStyle]`)
+- **Fixed:** `build_pie_series()` now guards against empty data after NaN drop (matching bar/line/scatter builders)
+- **Fixed:** Legend pollution — single-series cells no longer emit column names into the legend; only hue/color-grouped and pie cells contribute
+- **Fixed:** Notebook Example 43 crash (`outer_radius` → `radius`)
 
 ### v0.7.0
 - **Added:** Full Figure API parity for MatrixFigure cell builders — `hue`, `stack`, `gradient`, `agg`, `blur`, `select`, `animation` on `.cell().bar()`, `.cell().plot()`, `.cell().scatter()`, `.cell().pie()`

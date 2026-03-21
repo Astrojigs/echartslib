@@ -239,3 +239,19 @@ class TestBuildPieSeries:
     def test_label_font_size(self, pie_df):
         entry, _ = build_pie_series(pie_df, "Name", "Val", label_font_size=20)
         assert entry["label"]["fontSize"] == 20
+
+    def test_empty_df(self):
+        df = pd.DataFrame({"Name": [None], "Val": [10.0]})
+        with pytest.warns(UserWarning, match="all rows dropped"):
+            entry, legend = build_pie_series(df, "Name", "Val")
+        assert entry["data"] == []
+        assert legend == []
+
+
+class TestBuildScatterSeriesEmpty:
+    def test_drops_nan_rows(self):
+        df = pd.DataFrame({"X": [1.0, 2.0], "Y": [10.0, float("nan")]})
+        with pytest.warns(UserWarning, match="1 rows dropped"):
+            series, legend = build_scatter_series(df, "X", "Y")
+        assert len(series) == 1
+        assert len(series[0]["data"]) == 1  # only valid row kept
