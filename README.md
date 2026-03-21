@@ -85,7 +85,7 @@ Three lines from DataFrame to interactive chart.
 
 ## Chart Types
 
-echartsy v0.6.5 supports **19 chart types** covering cartesian, standalone, hierarchical, relational, and statistical visualizations.
+echartsy v0.7.0 supports **19 chart types** covering cartesian, standalone, hierarchical, relational, and statistical visualizations.
 
 ### Cartesian Charts
 
@@ -593,6 +593,14 @@ Same as `Figure` but adds timeline animation. Extra parameters:
 ---
 
 ## Changelog (Recent)
+
+### v0.7.0
+- **Added:** Full Figure API parity for MatrixFigure cell builders — `hue`, `stack`, `gradient`, `agg`, `blur`, `select`, `animation` on `.cell().bar()`, `.cell().plot()`, `.cell().scatter()`, `.cell().pie()`
+- **Added:** `build_scatter_series()` and `build_pie_series()` shared builder functions in `_chart_methods.py`
+- **Added:** Automatic legend emission from cell hue/color grouping with scrollable bottom legend
+- **Changed:** `_CellBuilder.scatter(color=...)` now takes a column name for grouping (matching `Figure.scatter()`) — use `item_style=ec.ItemStyle(color=...)` for literal colours
+- **Fixed:** MatrixFigure grid layout — `containLabel: True`, proper margins, no cell/label/legend overlap
+- **Fixed:** Row/column name labels positioned on y-axis (first column) and x-axis (bottom row) to prevent mid-grid collisions
 
 ### v0.6.5
 - **Added:** `label_style` and `upper_label_style` on `treemap()` — full `LabelStyle` control for treemap labels (font, color, position, overflow)

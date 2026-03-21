@@ -1056,6 +1056,48 @@ class TestHeatmapExtended:
             fig.heatmap(df, x="X", y="Y", value="V")
 
 
+class TestHeatmapPiecewise:
+    def test_piecewise_visual_map(self):
+        df = pd.DataFrame({
+            "X": ["A", "B", "C"], "Y": ["D", "E", "F"], "V": [1, 5, 10]
+        })
+        pieces = [
+            {"min": 0, "max": 3, "label": "Low", "color": "#00ff00"},
+            {"min": 3, "max": 7, "label": "Mid", "color": "#ffff00"},
+            {"min": 7, "max": 10, "label": "High", "color": "#ff0000"},
+        ]
+        fig = ec.Figure()
+        fig.heatmap(df, x="X", y="Y", value="V",
+                    visual_map_type="piecewise", pieces=pieces)
+        opt = fig.to_option()
+        vm = opt["visualMap"]
+        assert vm["type"] == "piecewise"
+        assert len(vm["pieces"]) == 3
+
+    def test_continuous_default_unchanged(self):
+        df = pd.DataFrame({
+            "X": ["A", "B"], "Y": ["C", "D"], "V": [10, 20]
+        })
+        fig = ec.Figure()
+        fig.heatmap(df, x="X", y="Y", value="V")
+        opt = fig.to_option()
+        vm = opt["visualMap"]
+        assert vm.get("type", "continuous") != "piecewise"
+        assert "min" in vm and "max" in vm
+
+    def test_progressive_rendering(self):
+        df = pd.DataFrame({
+            "X": ["A", "B"], "Y": ["C", "D"], "V": [10, 20]
+        })
+        fig = ec.Figure()
+        fig.heatmap(df, x="X", y="Y", value="V",
+                    progressive=500, progressive_threshold=2000)
+        opt = fig.to_option()
+        s = opt["series"][0]
+        assert s["progressive"] == 500
+        assert s["progressiveThreshold"] == 2000
+
+
 class TestFunnelExtended:
     def test_funnel_emphasis(self, simple_df):
         from echartsy.emphasis import FunnelEmphasis
@@ -1191,6 +1233,135 @@ class TestErrorPaths:
         fig = ec.Figure()
         with pytest.raises(ec.DataValidationError, match="values but there are"):
             fig.radar([{"name": "A", "max": 100}], [[1, 2, 3]])
+
+
+class TestCalendarPie:
+    @pytest.fixture
+    def cal_pie_df(self):
+        return pd.DataFrame({
+            "Date": ["2024-01-01", "2024-01-01", "2024-01-02", "2024-01-02", "2024-01-03"],
+            "Category": ["A", "B", "A", "B", "A"],
+            "Value": [30, 70, 40, 60, 100],
+        })
+
+    def test_calendar_pie_basic(self, cal_pie_df):
+        fig = ec.Figure()
+        fig.calendar_pie(cal_pie_df, date="Date", names="Category", values="Value")
+        opt = fig.to_option()
+        assert "calendar" in opt
+        pie_series = [s for s in opt["series"] if s["type"] == "pie"]
+        assert len(pie_series) == 3  # 3 unique dates
+
+    def test_calendar_pie_coordinate_system(self, cal_pie_df):
+        fig = ec.Figure()
+        fig.calendar_pie(cal_pie_df, date="Date", names="Category", values="Value")
+        opt = fig.to_option()
+        for s in opt["series"]:
+            assert s["coordinateSystem"] == "calendar"
+            assert s["calendarIndex"] == 0
+
+    def test_calendar_pie_has_calendar_component(self, cal_pie_df):
+        fig = ec.Figure()
+        fig.calendar_pie(cal_pie_df, date="Date", names="Category", values="Value")
+        opt = fig.to_option()
+        assert "calendar" in opt
+        assert opt["calendar"]["range"] == "2024"
+
+    def test_calendar_pie_mode(self, cal_pie_df):
+        fig = ec.Figure()
+        fig.calendar_pie(cal_pie_df, date="Date", names="Category", values="Value")
+        assert fig._chart_mode == "calendar"
+
+    def test_calendar_pie_radius(self, cal_pie_df):
+        fig = ec.Figure()
+        fig.calendar_pie(cal_pie_df, date="Date", names="Category", values="Value",
+                         pie_radius=20)
+        opt = fig.to_option()
+        assert opt["series"][0]["radius"] == 20
+
+
+class TestParallel:
+    @pytest.fixture
+    def parallel_df(self):
+        return pd.DataFrame({
+            "Speed": [120, 130, 140, 150],
+            "Weight": [2.5, 3.0, 2.8, 3.2],
+            "Safety": [8, 7, 9, 6],
+            "Type": ["SUV", "Sedan", "SUV", "Truck"],
+        })
+
+    def test_parallel_basic(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight", "Safety"])
+        opt = fig.to_option()
+        assert opt["series"][0]["type"] == "parallel"
+        assert len(opt["parallelAxis"]) == 3
+        assert "parallel" in opt
+        assert len(opt["series"][0]["data"]) == 4
+
+    def test_parallel_mixed_dims(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Type", "Safety"])
+        opt = fig.to_option()
+        axes = opt["parallelAxis"]
+        assert axes[0]["type"] == "value"
+        assert axes[1]["type"] == "category"
+        assert "data" in axes[1]
+        assert axes[2]["type"] == "value"
+
+    def test_parallel_color_dim(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight", "Safety"],
+                     color_dim="Safety")
+        opt = fig.to_option()
+        assert "visualMap" in opt
+        assert opt["visualMap"]["dimension"] == 2
+
+    def test_parallel_mode_set(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight"])
+        assert fig._chart_mode == "parallel"
+
+    def test_parallel_mode_conflict(self, parallel_df, simple_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight"])
+        with pytest.raises(BuilderConfigError, match="mode"):
+            fig.bar(simple_df, x="X", y="Y")
+
+    def test_parallel_to_option_structure(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight", "Safety"])
+        fig.title("Test")
+        opt = fig.to_option()
+        assert "title" in opt
+        assert "parallelAxis" in opt
+        assert "parallel" in opt
+        assert "series" in opt
+        assert "tooltip" in opt
+
+    def test_parallel_axis_expand(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight", "Safety"],
+                     axis_expand=True, axis_expand_count=2)
+        opt = fig.to_option()
+        assert opt["parallel"]["axisExpandable"] is True
+        assert opt["parallel"]["axisExpandCount"] == 2
+
+    def test_parallel_smooth(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight"],
+                     smooth=True, line_opacity=0.5)
+        opt = fig.to_option()
+        s = opt["series"][0]
+        assert s["smooth"] is True
+        assert s["lineStyle"]["opacity"] == 0.5
+
+    def test_parallel_emphasis(self, parallel_df):
+        fig = ec.Figure()
+        fig.parallel(parallel_df, dimensions=["Speed", "Weight"],
+                     emphasis=ec.Emphasis(focus="self"))
+        opt = fig.to_option()
+        assert opt["series"][0]["emphasis"]["focus"] == "self"
 
 
 class TestFigureFactory:

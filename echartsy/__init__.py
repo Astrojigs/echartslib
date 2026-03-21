@@ -46,6 +46,7 @@ from echartsy.exceptions import (
     TimelineConfigError,
 )
 from echartsy.figure import Figure, figure
+from echartsy.matrix import MatrixFigure
 from echartsy.styles import (
     PALETTE_CLINICAL,
     PALETTE_DARK,
@@ -58,7 +59,7 @@ from echartsy.timeline import (
     timeline_figure,
 )
 
-__version__ = "0.6.5"
+__version__ = "0.7.0"
 
 __all__ = [
     # Config
@@ -69,6 +70,8 @@ __all__ = [
     # Figure
     "Figure",
     "figure",
+    # Matrix
+    "MatrixFigure",
     # Timeline
     "TimelineFigure",
     "timeline_figure",

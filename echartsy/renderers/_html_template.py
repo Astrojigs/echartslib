@@ -38,7 +38,7 @@ def _json_default(obj: object) -> object:
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 # CDN URL for Apache ECharts
-ECHARTS_CDN = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
+ECHARTS_CDN = "https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"
 
 # ── Adaptive colour constants ────────────────────────────────────────────
 # Hardcoded light-mode colours that the StylePreset defaults ship with.

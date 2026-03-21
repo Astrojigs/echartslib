@@ -1947,6 +1947,10 @@ class Figure:
         visual_min: Optional[float] = None,
         visual_max: Optional[float] = None,
         in_range_colors: Optional[List[str]] = None,
+        visual_map_type: Literal["continuous", "piecewise"] = "continuous",
+        pieces: Optional[List[dict]] = None,
+        progressive: Optional[int] = None,
+        progressive_threshold: Optional[int] = None,
         emphasis: Optional[Emphasis] = None,
         label_style: Optional[LabelStyle] = None,
         item_style: Optional[ItemStyle] = None,
@@ -1994,11 +1998,22 @@ class Figure:
             "#f46d43", "#d73027", "#a50026",
         ]
 
-        self._extra["visualMap"] = {
-            "min": vmin, "max": vmax, "calculable": True,
-            "orient": "horizontal", "left": "center", "bottom": "5%",
-            "inRange": {"color": colors},
-        }
+        if visual_map_type == "piecewise":
+            vm: dict = {
+                "type": "piecewise",
+                "pieces": pieces or [],
+                "orient": "horizontal",
+                "left": "center", "bottom": "5%",
+            }
+            if in_range_colors:
+                vm["inRange"] = {"color": in_range_colors}
+            self._extra["visualMap"] = vm
+        else:
+            self._extra["visualMap"] = {
+                "min": vmin, "max": vmax, "calculable": True,
+                "orient": "horizontal", "left": "center", "bottom": "5%",
+                "inRange": {"color": colors},
+            }
 
         emphasis_dict = {"itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(0,0,0,0.5)"}}
         if emphasis is not None:
@@ -2009,6 +2024,10 @@ class Figure:
             "label": {"show": label_show, "formatter": label_formatter},
             "emphasis": emphasis_dict,
         }
+        if progressive is not None:
+            entry["progressive"] = progressive
+        if progressive_threshold is not None:
+            entry["progressiveThreshold"] = progressive_threshold
         _merge_style_params(
             entry, label_style=label_style, item_style=item_style,
             selected_mode=selected_mode, animation=animation,
@@ -2895,6 +2914,235 @@ class Figure:
         self._tooltip_cfg = {"trigger": "item", "confine": True}
         return self
 
+    # ─── CALENDAR PIE ─────────────────────────────────────────────────────
+
+    def calendar_pie(
+        self, df: pd.DataFrame,
+        date: str, names: str, values: str, *,
+        year: Optional[int] = None,
+        pie_radius: int = 15,
+        cell_size: Optional[List] = None,
+        orient: Literal["horizontal", "vertical"] = "horizontal",
+        **series_kw: Any,
+    ) -> "Figure":
+        """Add mini pie charts on a calendar grid.
+
+        Each unique date gets its own pie chart positioned on the calendar.
+
+        Parameters
+        ----------
+        df : DataFrame
+            Source data.
+        date : str
+            Date column (parseable by ``pd.to_datetime``).
+        names : str
+            Column for pie slice names.
+        values : str
+            Column for pie slice values.
+        year : int, optional
+            Calendar year to display. Auto-detected if None.
+        pie_radius : int
+            Radius of each mini pie in pixels.
+        cell_size : list, optional
+            Calendar cell size (e.g. ``[50, 50]``).
+        orient : {"horizontal", "vertical"}
+            Calendar orientation.
+
+        Returns
+        -------
+        Figure
+            Self, for method chaining.
+        """
+        self._ensure_mode("calendar", "calendar_pie")
+        df = _validate_df(df, "calendar_pie")
+        _validate_columns(df, [date, names, values], "calendar_pie")
+
+        dff = df.copy()
+        dff[values] = _coerce_numeric(dff, values, "calendar_pie")
+        dff[date] = pd.to_datetime(dff[date]).dt.strftime("%Y-%m-%d")
+        dff = dff.dropna(subset=[date, values])
+
+        if year is None:
+            year = int(pd.to_datetime(dff[date]).dt.year.mode().iloc[0])
+
+        resolved_cell_size = cell_size or [50, 50]
+
+        # Calendar component
+        cal_cfg: dict = {
+            "range": str(year),
+            "cellSize": resolved_cell_size,
+            "orient": orient,
+            "left": 30, "right": 30, "top": 60, "bottom": 30,
+            "itemStyle": {"borderWidth": 0.5, "borderColor": "#fff"},
+        }
+        self._extra["calendar"] = cal_cfg
+
+        # One pie series per unique date
+        for date_val, group in dff.groupby(date):
+            pie_data = [
+                {"name": str(r[names]), "value": round(float(r[values]), 4)}
+                for _, r in group.iterrows()
+            ]
+            entry: dict = {
+                "type": "pie",
+                "coordinateSystem": "calendar",
+                "calendarIndex": 0,
+                "center": date_val,
+                "radius": pie_radius,
+                "data": pie_data,
+                "label": {"show": False},
+            }
+            entry.update(series_kw)
+            self._series.append(entry)
+            self._series_meta.append(_SeriesMeta("pie", str(date_val)))
+
+        self._tooltip_cfg = {"trigger": "item", "confine": True}
+        return self
+
+    # ─── PARALLEL COORDINATES ─────────────────────────────────────────────
+
+    def parallel(
+        self, df: pd.DataFrame,
+        dimensions: Sequence[str], *,
+        color_dim: Optional[str] = None,
+        color_range: Optional[List[str]] = None,
+        smooth: bool = False,
+        line_opacity: float = 0.3,
+        active_opacity: float = 0.8,
+        inactive_opacity: float = 0.05,
+        realtime: bool = True,
+        axis_expand: bool = False,
+        axis_expand_count: int = 5,
+        emphasis: Optional[Emphasis] = None,
+        item_style: Optional[ItemStyle] = None,
+        line_style: Optional[LineStyle] = None,
+        tooltip: Optional[TooltipStyle] = None,
+        **series_kw: Any,
+    ) -> "Figure":
+        """Add a parallel coordinates chart.
+
+        Parameters
+        ----------
+        df : DataFrame
+            Source data.
+        dimensions : Sequence[str]
+            Column names to use as parallel axes (ordered left → right).
+        color_dim : str, optional
+            Column to map to colour via a continuous visualMap.
+        color_range : list[str], optional
+            Colour gradient endpoints for the visualMap (e.g. ``["#3b8686", "#e74c3c"]``).
+        smooth : bool
+            Whether to draw smooth (curved) lines.
+        line_opacity : float
+            Opacity of each polyline (0–1).
+        active_opacity : float
+            Opacity when an axis brush is active.
+        inactive_opacity : float
+            Opacity for lines outside the brush selection.
+        realtime : bool
+            Whether brushing updates in real-time.
+        axis_expand : bool
+            Enable axis expand mode (collapse axes to save space).
+        axis_expand_count : int
+            Number of axes visible when axis expand is active.
+        emphasis : Emphasis, optional
+            Emphasis style.
+        item_style : ItemStyle, optional
+            Item style override.
+        line_style : LineStyle, optional
+            Line style override.
+        tooltip : TooltipStyle, optional
+            Per-series tooltip.
+
+        Returns
+        -------
+        Figure
+            Self, for method chaining.
+        """
+        self._ensure_mode("parallel", "parallel")
+        df = _validate_df(df, "parallel")
+        _validate_columns(df, list(dimensions), "parallel")
+
+        # ── Build parallelAxis array ──
+        parallel_axes: List[dict] = []
+        for i, dim in enumerate(dimensions):
+            col = df[dim]
+            if pd.api.types.is_numeric_dtype(col):
+                parallel_axes.append({"dim": i, "name": dim, "type": "value"})
+            else:
+                unique_vals = sorted(col.dropna().unique(), key=str)
+                parallel_axes.append({
+                    "dim": i, "name": dim,
+                    "type": "category", "data": [str(v) for v in unique_vals],
+                })
+
+        # ── Build parallel component ──
+        parallel_cfg: dict = {
+            "left": "5%", "right": "13%", "bottom": "10%", "top": "15%",
+            "parallelAxisDefault": {
+                "type": "value", "nameLocation": "end", "nameGap": 20,
+                "realtime": realtime,
+            },
+        }
+        if axis_expand:
+            parallel_cfg["axisExpandable"] = True
+            parallel_cfg["axisExpandCount"] = axis_expand_count
+
+        # ── Build series data ──
+        data_list: List[list] = []
+        for _, row in df.iterrows():
+            item: list = []
+            for dim in dimensions:
+                val = row[dim]
+                item.append(val if pd.api.types.is_numeric_dtype(df[dim]) else str(val))
+            data_list.append(item)
+
+        # ── Series entry ──
+        entry: dict = {
+            "type": "parallel",
+            "coordinateSystem": "parallel",
+            "lineStyle": {"opacity": line_opacity},
+            "smooth": smooth,
+            "inactiveOpacity": inactive_opacity,
+            "activeOpacity": active_opacity,
+            "data": data_list,
+        }
+        if line_style is not None:
+            entry.setdefault("lineStyle", {}).update(line_style.to_dict())
+        if item_style is not None:
+            entry.setdefault("itemStyle", {}).update(item_style.to_dict())
+        if emphasis is not None:
+            entry["emphasis"] = emphasis.to_dict()
+        if tooltip is not None:
+            entry["tooltip"] = tooltip.to_dict()
+        entry.update(series_kw)
+
+        # ── visualMap for colour dimension ──
+        if color_dim is not None:
+            _validate_columns(df, [color_dim], "parallel (color_dim)")
+            dim_idx = list(dimensions).index(color_dim) if color_dim in dimensions else None
+            col_vals = _coerce_numeric(df, color_dim, "parallel")
+            colors = color_range or ["#3b8686", "#e74c3c"]
+            vm: dict = {
+                "min": float(col_vals.min()),
+                "max": float(col_vals.max()),
+                "calculable": True,
+                "orient": "vertical",
+                "right": 0, "top": "15%", "bottom": "10%",
+                "inRange": {"color": colors},
+            }
+            if dim_idx is not None:
+                vm["dimension"] = dim_idx
+            self._extra["visualMap"] = vm
+
+        self._extra["_parallel_axes"] = parallel_axes
+        self._extra["_parallel_cfg"] = parallel_cfg
+
+        self._series.append(entry)
+        self._series_meta.append(_SeriesMeta("parallel", "parallel"))
+        self._tooltip_cfg = {"trigger": "item", "confine": True}
+        return self
+
     # ═══════════════════════════════════════════════════════════════════════
     # Annotations — markLine / markPoint / markArea
     # ═══════════════════════════════════════════════════════════════════════
@@ -3093,6 +3341,23 @@ class Figure:
             option["series"] = copy.deepcopy(self._series)
             if self._toolbox_cfg:
                 option["toolbox"] = copy.deepcopy(self._toolbox_cfg)
+            option.update({k: copy.deepcopy(v) for k, v in self._extra.items() if not k.startswith("_")})
+            return option
+
+        if mode == "parallel":
+            option = {}
+            if self._title_cfg:
+                option["title"] = copy.deepcopy(self._title_cfg)
+            option["tooltip"] = copy.deepcopy(self._tooltip_cfg)
+            option["parallelAxis"] = copy.deepcopy(self._extra.get("_parallel_axes", []))
+            option["parallel"] = copy.deepcopy(self._extra.get("_parallel_cfg", {}))
+            if self._palette:
+                option["color"] = list(self._palette)
+            option["series"] = copy.deepcopy(self._series)
+            if self._toolbox_cfg:
+                option["toolbox"] = copy.deepcopy(self._toolbox_cfg)
+            if "visualMap" in self._extra:
+                option["visualMap"] = copy.deepcopy(self._extra["visualMap"])
             option.update({k: copy.deepcopy(v) for k, v in self._extra.items() if not k.startswith("_")})
             return option
 
