@@ -187,6 +187,7 @@ class Figure:
         key: Optional[str] = None,
         rows: int = 1,
         row_heights: Optional[List[str]] = None,
+        _subplot_mode: bool = False,
     ) -> None:
         self._height = height
         self._width = width
@@ -194,6 +195,7 @@ class Figure:
         self._theme = theme
         self._key = key
         self._style = style or StylePreset.CLINICAL
+        self._subplot_mode = _subplot_mode
 
         # Multi-grid support
         self._n_grids = max(1, rows)
@@ -3305,6 +3307,8 @@ class Figure:
         Useful for debugging, testing, or feeding into a custom renderer.
         """
         if not self._series:
+            if self._subplot_mode:
+                return {"_empty": True}
             raise BuilderConfigError("Cannot build option — no series have been added.")
 
         mode = self._chart_mode or "cartesian"
@@ -3442,8 +3446,9 @@ class Figure:
         # Pass internal metadata for the layout resolver (stripped before output)
         option["_meta"] = {"user_set_rotate": self._user_set_rotate}
 
-        # Anti-overlap pass
-        option = _resolve_layout(option, self._series_meta)
+        # Anti-overlap pass (skip in subplot mode — container handles layout)
+        if not self._subplot_mode:
+            option = _resolve_layout(option, self._series_meta)
 
         return option
 

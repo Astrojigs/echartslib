@@ -594,19 +594,27 @@ Same as `Figure` but adds timeline animation. Extra parameters:
 
 ## Changelog (Recent)
 
+### v0.7.2
+- **Fixed:** Per-cell legend isolation — toggling a legend in one subplot cell no longer hides identically-named series in other cells
+- **Fixed:** Per-cell `.title()` now centers within its own cell instead of the entire container
+- **Fixed:** Per-cell `.margins()` propagation — `ax.margins(top=...)` etc. now correctly adjust the cell's grid area
+- **Fixed:** Per-cell `.tooltip()` propagation into the merged subplot option
+- **Fixed:** Pie charts in subplots now use the global palette for per-slice colors instead of a single series color
+- **Added:** Per-cell `toolbox()`, `datazoom()`, `visual_map()`, `palette()`, `grid()`, `xlim()`/`ylim()`, `xticks()`/`yticks()` propagation in subplots
+- **Removed:** `cell_legend` parameter from `subplots()` — use `ax.legend()` on individual cells instead
+
 ### v0.7.1
+- **Breaking:** Replaced `MatrixFigure` with matplotlib-style `ec.subplots(nrows, ncols)` — each cell is a full `Figure`
+- **Added:** `ec.subplots()` factory returning `(fig, ax)` with numpy-array shape matching matplotlib (scalar / 1-D / 2-D)
+- **Added:** `SubplotFigure` container with `.suptitle()`, `.palette()`, `.legend()` global chrome
+- **Added:** Per-cell `ax.legend()` for independent legend control per subplot cell
+- **Added:** Full Figure method propagation in subplots: `margins()`, `tooltip()`, `save()`/`toolbox()`, `datazoom()`, `visual_map()`, per-cell `palette()`
+- **Removed:** `MatrixFigure`, auto-populate methods (`group_row`/`group_col`), `pairplot()`
 - **Fixed:** `build_pie_series()` type hint corrected (`Optional[Any]` → `Optional[ItemStyle]`)
-- **Fixed:** `build_pie_series()` now guards against empty data after NaN drop (matching bar/line/scatter builders)
-- **Fixed:** Legend pollution — single-series cells no longer emit column names into the legend; only hue/color-grouped and pie cells contribute
-- **Fixed:** Notebook Example 43 crash (`outer_radius` → `radius`)
+- **Fixed:** `build_pie_series()` now guards against empty data after NaN drop
 
 ### v0.7.0
-- **Added:** Full Figure API parity for MatrixFigure cell builders — `hue`, `stack`, `gradient`, `agg`, `blur`, `select`, `animation` on `.cell().bar()`, `.cell().plot()`, `.cell().scatter()`, `.cell().pie()`
 - **Added:** `build_scatter_series()` and `build_pie_series()` shared builder functions in `_chart_methods.py`
-- **Added:** Automatic legend emission from cell hue/color grouping with scrollable bottom legend
-- **Changed:** `_CellBuilder.scatter(color=...)` now takes a column name for grouping (matching `Figure.scatter()`) — use `item_style=ec.ItemStyle(color=...)` for literal colours
-- **Fixed:** MatrixFigure grid layout — `containLabel: True`, proper margins, no cell/label/legend overlap
-- **Fixed:** Row/column name labels positioned on y-axis (first column) and x-axis (bottom row) to prevent mid-grid collisions
 
 ### v0.6.5
 - **Added:** `label_style` and `upper_label_style` on `treemap()` — full `LabelStyle` control for treemap labels (font, color, position, overflow)
