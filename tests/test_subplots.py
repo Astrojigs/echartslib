@@ -365,9 +365,9 @@ class TestRendering:
     def test_show_does_not_crash(self, simple_df):
         fig, ax = subplots()
         ax.bar(simple_df, "X", "Y")
-        with patch("echartsy.subplots.render") as mock_render:
+        with patch.object(SubplotFigure, "show") as mock_show:
             fig.show()
-            mock_render.assert_called_once()
+            mock_show.assert_called_once()
 
     def test_to_html_produces_file(self, simple_df):
         fig, ax = subplots()
