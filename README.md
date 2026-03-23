@@ -594,6 +594,16 @@ Same as `Figure` but adds timeline animation. Extra parameters:
 
 ## Changelog (Recent)
 
+### v0.7.3
+- **Added:** `AxesGrid` / `AxesRow` containers — enables Shift-Tab docstring popups and tab-completion in Jupyter
+- **Added:** `fig.margins(top, bottom, left, right)` on `SubplotFigure` for outer grid margins
+- **Added:** Dual y-axis support in subplot cells (`ax.plot(..., axis=1)`)
+- **Added:** Non-cartesian chart positioning in subplots (funnel, radar, gauge, treemap, sankey)
+- **Added:** Input validation — `subplots(0, 2)` now raises `ValueError`
+- **Fixed:** Per-cell `ax.palette()` now correctly colors individual pie slices
+- **Fixed:** Heatmap axes remain visible in subplot cells
+- **Fixed:** `datazoom` and `visualMap` axis binding uses correct indices per cell
+
 ### v0.7.2
 - **Fixed:** Per-cell legend isolation — toggling a legend in one subplot cell no longer hides identically-named series in other cells
 - **Fixed:** Per-cell `.title()` now centers within its own cell instead of the entire container

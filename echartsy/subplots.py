@@ -18,11 +18,54 @@ from typing import (
     Tuple,
 )
 
-import numpy as np
-
 from echartsy.figure import Figure
 from echartsy.renderers import render
 from echartsy.styles import StylePreset
+
+
+# ─── Axes grid ────────────────────────────────────────────────────────────────
+
+class AxesGrid:
+    """Lightweight 2-D container whose ``__getitem__`` returns :class:`Figure`.
+
+    Jupyter's *jedi* engine reads the return-type annotation on
+    ``__getitem__`` to enable **Shift-Tab** docstring popups and
+    tab-completion on ``ax[i, j].bar(...)``.
+    """
+
+    def __init__(self, grid: List[List["Figure"]]) -> None:
+        self._grid = grid
+        self._nrows = len(grid)
+        self._ncols = len(grid[0]) if grid else 0
+
+    # ── 2-D indexing (ax[r, c]) ──────────────────────────────────────
+    def __getitem__(self, key) -> "Figure":
+        if isinstance(key, tuple):
+            r, c = key
+            return self._grid[r][c]
+        return self._grid[key]  # type: ignore[return-value]
+
+    def __len__(self) -> int:
+        return self._nrows
+
+    def __repr__(self) -> str:
+        return f"AxesGrid({self._nrows}x{self._ncols})"
+
+
+class AxesRow:
+    """1-D row of :class:`Figure` cells — returned when ``nrows == 1`` or ``ncols == 1``."""
+
+    def __init__(self, cells: List["Figure"]) -> None:
+        self._cells = cells
+
+    def __getitem__(self, key: int) -> "Figure":
+        return self._cells[key]
+
+    def __len__(self) -> int:
+        return len(self._cells)
+
+    def __repr__(self) -> str:
+        return f"AxesRow({len(self._cells)})"
 
 
 # ─── Factory ──────────────────────────────────────────────────────────────────
@@ -66,9 +109,14 @@ def subplots(
         *ax* shape follows matplotlib conventions:
 
         * ``(1, 1)`` → scalar :class:`Figure`
-        * ``(1, N)`` or ``(N, 1)`` → 1-D ``numpy.ndarray`` of Figures
-        * ``(M, N)`` → 2-D ``numpy.ndarray`` of shape ``(M, N)``
+        * ``(1, N)`` or ``(N, 1)`` → 1-D :class:`AxesRow` of Figures
+        * ``(M, N)`` → 2-D :class:`AxesGrid` of shape ``(M, N)``
     """
+    if nrows < 1 or ncols < 1:
+        raise ValueError(
+            f"subplots() requires nrows >= 1 and ncols >= 1, got ({nrows}, {ncols})"
+        )
+
     fig = SubplotFigure(
         nrows=nrows, ncols=ncols,
         height=height, width=width,
@@ -77,22 +125,16 @@ def subplots(
         cell_gap=cell_gap,
     )
 
-    # Build ax array
-    cells = fig._cells                       # 2-D list
-    arr = np.empty((nrows, ncols), dtype=object)
-    for ri in range(nrows):
-        for ci in range(ncols):
-            arr[ri, ci] = cells[ri][ci]
-
-    # Squeeze to match matplotlib shape convention
+    # Build ax — shape follows matplotlib conventions
+    cells = fig._cells
     if nrows == 1 and ncols == 1:
-        ax: Any = arr[0, 0]
+        ax: Any = cells[0][0]                           # scalar Figure
     elif nrows == 1:
-        ax = arr[0, :]            # 1-D length ncols
+        ax = AxesRow(cells[0])                          # 1-D row
     elif ncols == 1:
-        ax = arr[:, 0]            # 1-D length nrows
+        ax = AxesRow([cells[r][0] for r in range(nrows)])  # 1-D col
     else:
-        ax = arr                  # 2-D
+        ax = AxesGrid(cells)                            # 2-D grid
 
     return fig, ax
 
@@ -147,6 +189,7 @@ class SubplotFigure:
             list(self._style.palette) if self._style.palette else None
         )
         self._global_legend_cfg: Optional[dict] = None
+        self._margins: dict = {}  # user overrides for top/bottom/left/right
 
     def __repr__(self) -> str:
         return f"SubplotFigure({self._nrows}×{self._ncols})"
@@ -210,6 +253,31 @@ class SubplotFigure:
         self._global_legend_cfg = cfg
         return self
 
+    def margins(
+        self,
+        top: Optional[int] = None,
+        bottom: Optional[int] = None,
+        left: Optional[int] = None,
+        right: Optional[int] = None,
+    ) -> SubplotFigure:
+        """Set outer margins (in percentage) around the entire subplot grid.
+
+        Parameters
+        ----------
+        top, bottom, left, right : int or None
+            Margin as a percentage of the container. Only provided values
+            are changed; ``None`` keeps the auto-computed default.
+        """
+        if top is not None:
+            self._margins["top"] = top
+        if bottom is not None:
+            self._margins["bottom"] = bottom
+        if left is not None:
+            self._margins["left"] = left
+        if right is not None:
+            self._margins["right"] = right
+        return self
+
     # ── Option assembly ───────────────────────────────────────────────────
 
     @staticmethod
@@ -240,12 +308,16 @@ class SubplotFigure:
         )
 
         # ── Layout math (percentage-based grid positions) ─────────────
-        top_margin = 8 if self._suptitle_cfg else 2
-        bottom_margin = 2 + (5 if has_legend else 0)
-        usable_h = 100 - top_margin - bottom_margin
+        top_margin = self._margins.get(
+            "top", 8 if self._suptitle_cfg else 2
+        )
+        bottom_margin = self._margins.get(
+            "bottom", 2 + (5 if has_legend else 0)
+        )
+        left_margin = self._margins.get("left", 2)
+        right_margin = self._margins.get("right", 2)
 
-        left_margin = 2
-        right_margin = 2
+        usable_h = 100 - top_margin - bottom_margin
         usable_w = 100 - left_margin - right_margin
 
         gap_pct = gap * 0.6
@@ -264,6 +336,7 @@ class SubplotFigure:
         all_toolbox: Optional[dict] = None
         all_datazoom: List[dict] = []
         all_visual_maps: List[dict] = []
+        option_extra: dict = {}   # for radar, parallel, calendar components
 
         grid_idx = 0
         for ri in range(n_rows):
@@ -323,6 +396,11 @@ class SubplotFigure:
                     if user_left == "center":
                         t["left"] = f"{cell_center_x}%"
                         t["textAlign"] = "center"
+                    elif user_left == "left":
+                        t["left"] = f"{left}%"
+                    elif user_left == "right":
+                        t["left"] = f"{round(left + cell_w, 2)}%"
+                        t["textAlign"] = "right"
                     elif isinstance(user_left, (int, float)):
                         # User specified px offset — convert relative to cell
                         t["left"] = round(left + user_left / container_w * 100, 2)
@@ -344,27 +422,12 @@ class SubplotFigure:
                     if cell_tb:
                         all_toolbox = copy.deepcopy(cell_tb)
 
-                # ── Per-cell datazoom ─────────────────────────────────
-                if not is_empty:
-                    cell_dz = cell_opt.get("dataZoom")
-                    if cell_dz:
-                        for dz in cell_dz:
-                            d = copy.deepcopy(dz)
-                            # Bind to this cell's axis index
-                            d["xAxisIndex"] = grid_idx
-                            all_datazoom.append(d)
-
-                # ── Per-cell visualMap ─────────────────────────────────
-                if not is_empty:
-                    cell_vm = cell_opt.get("visualMap")
-                    if cell_vm:
-                        vm = copy.deepcopy(cell_vm)
-                        # Bind to this cell's series indices
-                        if "seriesIndex" not in vm:
-                            vm["seriesIndex"] = len(all_series)
-                        all_visual_maps.append(vm)
-
                 # Build axes for this cell
+                mode = (cell._chart_mode or "cartesian") if not is_empty else None
+                # Modes that use cartesian axes (xAxis + yAxis + grid)
+                _CARTESIAN = {"cartesian", "heatmap"}
+                uses_axes = mode in _CARTESIAN
+
                 x_cfg: dict = {
                     "gridIndex": grid_idx,
                     "type": "category",
@@ -374,38 +437,41 @@ class SubplotFigure:
                     "gridIndex": grid_idx,
                     "type": "value",
                 }
+                extra_y_axes: List[dict] = []  # for dual y-axis
 
-                if is_empty:
+                if is_empty or not uses_axes:
                     x_cfg["show"] = False
                     y_cfg["show"] = False
                 else:
-                    # Extract axis config from the cell's option
-                    mode = cell._chart_mode or "cartesian"
+                    # Merge cell's x-axis config
+                    opt_x = cell_opt.get("xAxis")
+                    if opt_x:
+                        src = opt_x[0] if isinstance(opt_x, list) else opt_x
+                        for k, v in src.items():
+                            if k not in ("gridIndex",):
+                                x_cfg[k] = copy.deepcopy(v)
 
-                    if mode == "cartesian":
-                        # Merge cell's x-axis config
-                        opt_x = cell_opt.get("xAxis")
-                        if opt_x:
-                            src = opt_x[0] if isinstance(opt_x, list) else opt_x
-                            for k, v in src.items():
+                    # Merge cell's y-axis config (support dual y-axis)
+                    opt_y = cell_opt.get("yAxis")
+                    if opt_y:
+                        y_list = opt_y if isinstance(opt_y, list) else [opt_y]
+                        # Primary y-axis
+                        for k, v in y_list[0].items():
+                            if k not in ("gridIndex",):
+                                y_cfg[k] = copy.deepcopy(v)
+                        # Additional y-axes (dual axis)
+                        for extra in y_list[1:]:
+                            ey = {"gridIndex": grid_idx, "type": "value"}
+                            for k, v in extra.items():
                                 if k not in ("gridIndex",):
-                                    x_cfg[k] = copy.deepcopy(v)
-
-                        # Merge cell's y-axis config
-                        opt_y = cell_opt.get("yAxis")
-                        if opt_y:
-                            src = opt_y[0] if isinstance(opt_y, list) else opt_y
-                            for k, v in src.items():
-                                if k not in ("gridIndex",):
-                                    y_cfg[k] = copy.deepcopy(v)
-
-                    # Non-cartesian (pie) cells hide axes
-                    if mode != "cartesian":
-                        x_cfg["show"] = False
-                        y_cfg["show"] = False
+                                    ey[k] = copy.deepcopy(v)
+                            extra_y_axes.append(ey)
 
                 x_axes.append(x_cfg)
+                y_base_idx = len(y_axes)  # base index for this cell's y-axes
                 y_axes.append(y_cfg)
+                for ey in extra_y_axes:
+                    y_axes.append(ey)
 
                 # ── Series ────────────────────────────────────────────
                 # Namespace prefix: invisible zero-width spaces unique per
@@ -413,42 +479,78 @@ class SubplotFigure:
                 # don't interfere when toggling legends.
                 ns = "\u200B" * grid_idx  # cell 0 = "", cell 1 = "\u200B", …
 
+                # Non-cartesian types that need center positioning (like pie)
+                _CENTERED = {"pie", "sunburst", "radar"}
+                _POSITIONED = {"treemap", "funnel", "gauge", "sankey", "graph"}
+
                 if not is_empty:
                     # Per-cell palette: inject colors into series
                     cell_palette = cell._palette
                     cell_series = cell_opt.get("series", [])
+
+                    # Forward radar/parallel/calendar components
+                    for comp_key in ("radar", "parallelAxis", "parallel",
+                                     "calendar"):
+                        comp = cell_opt.get(comp_key)
+                        if comp:
+                            option_extra.setdefault(comp_key, [])
+                            if isinstance(comp, list):
+                                option_extra[comp_key].extend(
+                                    copy.deepcopy(comp)
+                                )
+                            else:
+                                option_extra[comp_key].append(
+                                    copy.deepcopy(comp)
+                                )
+
                     for si, sc in enumerate(cell_series):
                         s = copy.deepcopy(sc)
+                        stype = s.get("type", "")
                         # Namespace the series name
                         if ns and "name" in s:
                             s["name"] = ns + s["name"]
-                        if s.get("type") == "pie":
-                            # Position pie inside the grid area
+
+                        if stype in _CENTERED:
+                            # Position inside the grid area
                             cx = round(left + cell_w / 2, 2)
                             cy = round(top + cell_h / 2, 2)
                             if "center" not in s:
                                 s["center"] = [f"{cx}%", f"{cy}%"]
-                            if "radius" not in s:
+                            if stype == "pie" and "radius" not in s:
                                 s["radius"] = f"{min(cell_w, cell_h) * 0.30}%"
-                            # Namespace pie data item names
-                            if ns:
+                            # Namespace pie/sunburst data item names
+                            if ns and stype == "pie":
                                 for item in s.get("data", []):
                                     if isinstance(item, dict) and "name" in item:
                                         item["name"] = ns + item["name"]
+                        elif stype in _POSITIONED:
+                            # Position within cell bounds
+                            s.setdefault("left", f"{left}%")
+                            s.setdefault("top", f"{top}%")
+                            s.setdefault("width", f"{cell_w}%")
+                            s.setdefault("height", f"{cell_h}%")
                         else:
+                            # Cartesian — bind to this cell's axes
                             s["xAxisIndex"] = grid_idx
-                            s["yAxisIndex"] = grid_idx
-                        # Apply per-cell palette as series color
-                        # Skip pie — pie uses global palette for per-slice colors
-                        if (
-                            cell_palette
-                            and s.get("type") != "pie"
-                            and "color" not in s.get("itemStyle", {})
-                        ):
-                            s.setdefault("itemStyle", {})
-                            s["itemStyle"]["color"] = cell_palette[
-                                si % len(cell_palette)
-                            ]
+                            # Handle dual y-axis: offset local yAxisIndex
+                            local_yi = s.get("yAxisIndex", 0)
+                            s["yAxisIndex"] = y_base_idx + local_yi
+                        # Apply per-cell palette
+                        if cell_palette:
+                            if s.get("type") == "pie":
+                                # Pie: inject color per data item
+                                for di, item in enumerate(s.get("data", [])):
+                                    if isinstance(item, dict):
+                                        item.setdefault("itemStyle", {})
+                                        item["itemStyle"].setdefault(
+                                            "color",
+                                            cell_palette[di % len(cell_palette)],
+                                        )
+                            elif "color" not in s.get("itemStyle", {}):
+                                s.setdefault("itemStyle", {})
+                                s["itemStyle"]["color"] = cell_palette[
+                                    si % len(cell_palette)
+                                ]
                         # Strip internal metadata
                         s.pop("_meta", None)
                         for key in list(s):
@@ -507,6 +609,35 @@ class SubplotFigure:
                             cb = round(100 - top - cell_h + v / container_h * 100, 2)
                             lcfg["bottom"] = f"{cb}%"
                     all_legend_cfgs.append(lcfg)
+
+                # ── Per-cell datazoom (after axes so y_base_idx is set) ─
+                if not is_empty:
+                    cell_dz = cell_opt.get("dataZoom")
+                    if cell_dz:
+                        for dz in cell_dz:
+                            d = copy.deepcopy(dz)
+                            d["xAxisIndex"] = grid_idx
+                            d["yAxisIndex"] = y_base_idx
+                            all_datazoom.append(d)
+
+                # ── Per-cell visualMap (after series so offset is correct)
+                if not is_empty:
+                    cell_vm = cell_opt.get("visualMap")
+                    if cell_vm:
+                        vm = copy.deepcopy(cell_vm)
+                        # series_offset: how many series existed before this cell
+                        series_offset = len(all_series) - len(
+                            cell_opt.get("series", [])
+                        )
+                        if "seriesIndex" not in vm:
+                            vm["seriesIndex"] = series_offset
+                        elif isinstance(vm["seriesIndex"], list):
+                            vm["seriesIndex"] = [
+                                i + series_offset for i in vm["seriesIndex"]
+                            ]
+                        elif isinstance(vm["seriesIndex"], int):
+                            vm["seriesIndex"] += series_offset
+                        all_visual_maps.append(vm)
 
                 grid_idx += 1
 
@@ -585,6 +716,13 @@ class SubplotFigure:
                 if len(all_visual_maps) == 1
                 else all_visual_maps
             )
+
+        # ── Extra components (radar, parallel, calendar) ────────────
+        for comp_key, comp_list in option_extra.items():
+            if len(comp_list) == 1:
+                option[comp_key] = comp_list[0]
+            else:
+                option[comp_key] = comp_list
 
         return option
 

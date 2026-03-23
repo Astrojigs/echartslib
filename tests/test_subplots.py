@@ -5,13 +5,12 @@ import os
 import tempfile
 from unittest.mock import patch
 
-import numpy as np
 import pandas as pd
 import pytest
 
 import echartsy as ec
 from echartsy.figure import Figure
-from echartsy.subplots import SubplotFigure, subplots
+from echartsy.subplots import subplots, SubplotFigure, AxesGrid, AxesRow
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -59,22 +58,19 @@ class TestSubplotsFactory:
 
     def test_1d_row(self):
         fig, ax = subplots(1, 3)
-        assert isinstance(ax, np.ndarray)
-        assert ax.shape == (3,)
-        for cell in ax:
-            assert isinstance(cell, Figure)
+        assert len(ax) == 3
+        for i in range(3):
+            assert isinstance(ax[i], Figure)
 
     def test_1d_col(self):
         fig, ax = subplots(3, 1)
-        assert isinstance(ax, np.ndarray)
-        assert ax.shape == (3,)
-        for cell in ax:
-            assert isinstance(cell, Figure)
+        assert len(ax) == 3
+        for i in range(3):
+            assert isinstance(ax[i], Figure)
 
     def test_2d(self):
         fig, ax = subplots(2, 3)
-        assert isinstance(ax, np.ndarray)
-        assert ax.shape == (2, 3)
+        assert len(ax) == 2
         for ri in range(2):
             for ci in range(3):
                 assert isinstance(ax[ri, ci], Figure)
@@ -592,3 +588,203 @@ class TestFigureMethodPropagation:
         ax.xticks(rotate=45)
         opt = fig.to_option()
         assert opt["xAxis"][0]["axisLabel"]["rotate"] == 45
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Input validation
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestInputValidation:
+    def test_zero_nrows_raises(self):
+        with pytest.raises(ValueError):
+            subplots(0, 2)
+
+    def test_negative_ncols_raises(self):
+        with pytest.raises(ValueError):
+            subplots(2, -1)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Heatmap in subplot
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestHeatmapInSubplot:
+    @pytest.fixture()
+    def heatmap_df(self):
+        return pd.DataFrame({
+            "X": ["A", "A", "B", "B"],
+            "Y": ["r1", "r2", "r1", "r2"],
+            "Val": [1, 2, 3, 4],
+        })
+
+    def test_heatmap_axes_visible(self, simple_df, heatmap_df):
+        fig, ax = subplots(1, 2)
+        ax[0].bar(simple_df, "X", "Y")
+        ax[1].heatmap(heatmap_df, "X", "Y", "Val")
+        opt = fig.to_option()
+        # Heatmap cell (index 1) needs visible axes — show should NOT be False
+        assert opt["xAxis"][1].get("show") is not False
+        assert opt["yAxis"][1].get("show") is not False
+
+    def test_heatmap_visual_map_series_index(self, simple_df, heatmap_df):
+        fig, ax = subplots(1, 2)
+        ax[0].bar(simple_df, "X", "Y")
+        ax[1].heatmap(heatmap_df, "X", "Y", "Val")
+        opt = fig.to_option()
+        # The bar is series 0; heatmap is series 1 → visualMap should target 1
+        vm = opt["visualMap"]
+        if isinstance(vm, list):
+            vm = vm[0]
+        assert vm["seriesIndex"] == 1
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Horizontal bar in subplot
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestHorizontalBarInSubplot:
+    def test_barh_axis_types(self, simple_df):
+        fig, ax = subplots(1, 2)
+        ax[0].barh(simple_df, "X", "Y")
+        ax[1].bar(simple_df, "X", "Y")
+        opt = fig.to_option()
+        # barh cell (index 0): xAxis should be "value", yAxis should be "category"
+        assert opt["xAxis"][0]["type"] == "value"
+        assert opt["yAxis"][0]["type"] == "category"
+        # Normal bar cell (index 1): xAxis = "category", yAxis = "value"
+        assert opt["xAxis"][1]["type"] == "category"
+        assert opt["yAxis"][1]["type"] == "value"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Dual Y-axis
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestDualYAxis:
+    def test_dual_yaxis_creates_extra_y(self):
+        df = pd.DataFrame({"X": ["A", "B", "C"], "Y1": [10, 20, 30], "Y2": [100, 200, 300]})
+        fig, ax = subplots(1, 1)
+        ax.plot(df, "X", "Y1")
+        ax.plot(df, "X", "Y2", axis=1)
+        opt = fig.to_option()
+        assert len(opt["yAxis"]) >= 2
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Non-cartesian positioning (funnel)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestNonCartesianPositioning:
+    def test_funnel_positioned_in_cell(self, simple_df):
+        funnel_df = pd.DataFrame({
+            "Stage": ["Visit", "Signup", "Purchase"],
+            "Count": [100, 60, 20],
+        })
+        fig, ax = subplots(1, 2)
+        ax[0].bar(simple_df, "X", "Y")
+        ax[1].funnel(funnel_df, "Stage", "Count")
+        opt = fig.to_option()
+        funnel_series = [s for s in opt["series"] if s["type"] == "funnel"]
+        assert len(funnel_series) == 1
+        fs = funnel_series[0]
+        assert "left" in fs
+        assert "top" in fs
+        assert "width" in fs
+        assert "height" in fs
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Title positioning
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestTitlePositioning:
+    def test_title_left_keyword(self, simple_df):
+        fig, ax = subplots(1, 2)
+        ax[0].bar(simple_df, "X", "Y").title("T", left="left")
+        ax[1].bar(simple_df, "X", "Y")
+        opt = fig.to_option()
+        titles = opt["title"] if isinstance(opt["title"], list) else [opt["title"]]
+        cell_title = [t for t in titles if t["text"] == "T"][0]
+        # "left" keyword should resolve to a percentage string, not literal "left"
+        assert isinstance(cell_title["left"], str)
+        assert "%" in cell_title["left"]
+
+    def test_title_right_keyword(self, simple_df):
+        fig, ax = subplots(1, 2)
+        ax[0].bar(simple_df, "X", "Y").title("T", left="right")
+        ax[1].bar(simple_df, "X", "Y")
+        opt = fig.to_option()
+        titles = opt["title"] if isinstance(opt["title"], list) else [opt["title"]]
+        cell_title = [t for t in titles if t["text"] == "T"][0]
+        assert cell_title["textAlign"] == "right"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Pie palette in subplot
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestPiePaletteInSubplot:
+    def test_pie_per_cell_palette(self, pie_df):
+        colors = ["#ff0000", "#00ff00", "#0000ff"]
+        fig, ax = subplots(1, 2)
+        ax[0].pie(pie_df, "Name", "Val")
+        ax[0].palette(colors)
+        ax[1].bar(
+            pd.DataFrame({"X": ["A"], "Y": [10]}), "X", "Y"
+        )
+        opt = fig.to_option()
+        pie_series = [s for s in opt["series"] if s["type"] == "pie"][0]
+        for i, item in enumerate(pie_series["data"]):
+            assert item["itemStyle"]["color"] == colors[i % len(colors)]
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Multiple series in one cell
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestMultipleSeriesOneCell:
+    def test_overlay_bar_and_line(self, simple_df):
+        fig, ax = subplots(1, 2)
+        ax[0].bar(simple_df, "X", "Y")
+        ax[0].plot(simple_df, "X", "Y")
+        ax[1].bar(simple_df, "X", "Y")
+        opt = fig.to_option()
+        # The bar and line in cell 0 should share the same xAxisIndex
+        cell0_series = [s for s in opt["series"] if s.get("xAxisIndex") == 0]
+        assert len(cell0_series) == 2
+        types = {s["type"] for s in cell0_series}
+        assert "bar" in types
+        assert "line" in types
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  AxesGrid / AxesRow repr and len
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestAxesGridRow:
+    def test_axes_grid_repr(self):
+        _, ax = subplots(2, 3)
+        assert repr(ax) == "AxesGrid(2x3)"
+
+    def test_axes_row_repr(self):
+        _, ax = subplots(1, 3)
+        assert repr(ax) == "AxesRow(3)"
+
+    def test_axes_row_len(self):
+        _, ax = subplots(1, 3)
+        assert len(ax) == 3
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  SubplotFigure.margins()
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestFigMargins:
+    def test_fig_margins_top(self, simple_df):
+        fig, ax = subplots(1, 2)
+        ax[0].bar(simple_df, "X", "Y")
+        ax[1].bar(simple_df, "X", "Y")
+        fig.margins(top=15)
+        opt = fig.to_option()
+        top_val = float(opt["grid"][0]["top"].rstrip("%"))
+        assert top_val >= 15
