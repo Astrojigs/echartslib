@@ -1165,6 +1165,14 @@ class TestYticks:
             fig.yticks(axis=5)
 
 
+_has_scipy = True
+try:
+    import scipy  # noqa: F401
+except ImportError:
+    _has_scipy = False
+
+
+@pytest.mark.skipif(not _has_scipy, reason="scipy not installed")
 class TestKde:
     def test_kde_basic(self):
         np.random.seed(42)
