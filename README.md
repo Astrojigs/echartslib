@@ -594,6 +594,11 @@ Same as `Figure` but adds timeline animation. Extra parameters:
 
 ## Changelog (Recent)
 
+### v0.7.4
+- **Added:** 6 new color palettes: `PALETTE_OCEAN`, `PALETTE_SUNSET`, `PALETTE_EARTH`, `PALETTE_PASTEL`, `PALETTE_NEON`, `PALETTE_MONOCHROME`
+- **Added:** 5 new style presets: `StylePreset.OCEAN`, `SUNSET`, `EARTH`, `PASTEL`, `NEON`
+- **Renamed:** `PALETTE_CLINICAL` → `PALETTE_DEFAULT`, `StylePreset.CLINICAL` → `StylePreset.DEFAULT` (old names still work)
+
 ### v0.7.3
 - **Added:** `AxesGrid` / `AxesRow` containers — enables Shift-Tab docstring popups and tab-completion in Jupyter
 - **Added:** `fig.margins(top, bottom, left, right)` on `SubplotFigure` for outer grid margins

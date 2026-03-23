@@ -173,7 +173,7 @@ class Figure:
     -------
     >>> import echartsy as ec
     >>> ec.config(engine="jupyter")
-    >>> fig = ec.Figure(height="600px", style=ec.StylePreset.CLINICAL)
+    >>> fig = ec.Figure(height="600px", style=ec.StylePreset.DEFAULT)
     >>> fig.bar(df, x="Month", y="Revenue").title("Monthly Revenue").show()
     """
 
@@ -194,7 +194,7 @@ class Figure:
         self._renderer = renderer
         self._theme = theme
         self._key = key
-        self._style = style or StylePreset.CLINICAL
+        self._style = style or StylePreset.DEFAULT
         self._subplot_mode = _subplot_mode
 
         # Multi-grid support

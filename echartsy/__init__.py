@@ -50,7 +50,14 @@ from echartsy.subplots import SubplotFigure, subplots
 from echartsy.styles import (
     PALETTE_CLINICAL,
     PALETTE_DARK,
+    PALETTE_DEFAULT,
+    PALETTE_EARTH,
+    PALETTE_MONOCHROME,
+    PALETTE_NEON,
+    PALETTE_OCEAN,
+    PALETTE_PASTEL,
     PALETTE_RUSTY,
+    PALETTE_SUNSET,
     StylePreset,
 )
 from echartsy.timeline import (
@@ -59,7 +66,7 @@ from echartsy.timeline import (
     timeline_figure,
 )
 
-__version__ = "0.7.3"
+__version__ = "0.7.4"
 
 __all__ = [
     # Config
@@ -79,9 +86,16 @@ __all__ = [
     "detect_time_format",
     # Styles
     "StylePreset",
+    "PALETTE_DEFAULT",
     "PALETTE_CLINICAL",
     "PALETTE_DARK",
+    "PALETTE_EARTH",
+    "PALETTE_MONOCHROME",
+    "PALETTE_NEON",
+    "PALETTE_OCEAN",
+    "PALETTE_PASTEL",
     "PALETTE_RUSTY",
+    "PALETTE_SUNSET",
     # Emphasis
     "Emphasis",
     "LineEmphasis",

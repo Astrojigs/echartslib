@@ -167,7 +167,7 @@ class SubplotFigure:
         self._renderer = renderer
         self._theme = theme
         self._key = key
-        self._style = style or StylePreset.CLINICAL
+        self._style = style or StylePreset.DEFAULT
         self._cell_gap = cell_gap
 
         # 2-D grid of Figure instances

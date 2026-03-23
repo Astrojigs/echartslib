@@ -165,7 +165,7 @@ class TimelineFigure:
         self._renderer = renderer
         self._theme = theme
         self._key = key
-        self._style = style or StylePreset.CLINICAL
+        self._style = style or StylePreset.DEFAULT
         self._default_interval = interval
         self._autoplay = autoplay
         self._loop = loop
